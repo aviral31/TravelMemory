@@ -91,8 +91,7 @@ REACT_APP_BACKEND_URL=http://<backend-instance-ip>:3001
 
 ```bash
 npm install
-npm run build
-sudo mv build /var/www/travelmemory
+npm start
 ```
 
 ---
@@ -111,17 +110,16 @@ server {
     listen 80;
     server_name frontend.aviralpaliwal.ink;
 
-    root /var/www/travelmemory;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://<backend-private-ip>:3001/;
-    }
-
     location / {
-        try_files $uri /index.html;
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
     }
 }
+
 ```
 
 Enable site:
