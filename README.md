@@ -1,397 +1,140 @@
 # Travel Memory
 
-This README walks you through everything needed to **deploy the TravelMemory application** on an AWS EC2 Ubuntu instance, configure a MongoDB Atlas cluster, and expose the frontend via Nginx reverse proxy. Each step includes commands and a clear explanation so you understand *why* you're doing it.
+This README explains how to deploy the TravelMemory MERN application on AWS using EC2 instances, an Application Load Balancer (ALB), and Cloudflare DNS. It also covers MongoDB Atlas configuration and Nginx reverse proxy setup.
 
----
+Prerequisites
 
-## Table of Contents
+AWS account with permissions for EC2, Load Balancers, and Security Groups.
 
-1. [Prerequisites](#prerequisites)
-2. [EC2: Update & Install Node.js 22](#ec2-update-and-install-nodejs-22)
-3. [MongoDB Atlas: Create Cluster & Database](#mongodb-atlas-create-cluster--database)
-4. [Deploy Backend (Node.js / Express)](#deploy-backend-nodejs--express)
-5. [Deploy Frontend (React)](#deploy-frontend-react)
-6. [Nginx: Configure Reverse Proxy](#nginx-configure-reverse-proxy)
-7. [Run Backend/Frontend as Services (recommended)](#run-backendfrontend-as-services-recommended)
-8. [Troubleshooting & Common Issues](#troubleshooting--common-issues)
-9. [Security & Best Practices](#security--best-practices)
-10. [Next Steps / Enhancements](#next-steps--enhancements)
+Key pair (.pem) for SSH.
 
----
+MongoDB Atlas account.
 
-# Prerequisites
+Basic Git, SSH, and Linux terminal knowledge.
 
-* An **AWS account** and permissions to create EC2 instances and security groups.
-* A key pair (`.pem`) to SSH into EC2.
-* Basic familiarity with SSH, terminals, and editing files (nano/vi).
-* Git installed locally or on the EC2 instance for cloning repositories.
-* A MongoDB Atlas account for managed database (free tier is fine).
+Step 1 — Provision EC2 Instances
 
-> Note: Replace example placeholders (e.g., `EC2_PUBLIC_IP`, `your-bucket-name`, and `ENTER_YOUR_URL`) with actual values for your environment.
+Launch 4 Ubuntu EC2 instances (2 for frontend, 2 for backend).
 
----
+Configure Security Groups to allow:
 
-# EC2 — Update and install Node.js 22
+Port 22 (SSH)
 
-## 1. SSH into your EC2 instance
+Port 80 (HTTP)
 
-```bash
-ssh -i /path/to/your-key.pem ubuntu@EC2_PUBLIC_IP
-```
+Port 3000 (Frontend)
 
-**Why:** This opens a secure shell (SSH) session to run administrative commands on your server.
+Port 3001 (Backend)
 
-## 2. Update package lists & upgrade installed packages
+Step 2 — Install Node.js and npm
 
-```bash
 sudo apt update && sudo apt upgrade -y
-```
-
-**Explanation:**
-
-* `sudo apt update` refreshes the list of available packages and versions.
-* `sudo apt upgrade -y` upgrades installed packages to their latest versions. `-y` auto-confirms.
-
-## 3. Install Node.js 22 and npm (via NodeSource)
-
-```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
-```
 
-**Explanation:**
+Verify:
 
-* The curl command downloads and runs the NodeSource installer script which configures apt repositories for Node 22.
-* `sudo apt install nodejs` installs Node.js and the bundled npm.
-
-## 4. Verify installations
-
-```bash
 node -v
 npm -v
-```
 
-**Expected:** You should see Node 22.x and a corresponding `npm` version.
+Step 3 — Configure MongoDB Atlas
 
----
+Create a free cluster in Atlas.
 
-# MongoDB Atlas — Create cluster & database
+Add a DB user with read/write access.
 
-This section uses MongoDB Atlas (managed DB). You will create a cluster, user, whitelist IP or allow access, and create the `travelmemory` database using Compass or the Atlas UI.
+Whitelist EC2 public IPs or use 0.0.0.0/0 (testing only).
 
-## 1. Create a MongoDB Atlas cluster
+Get the connection URI and set it in .env for the backend:
 
-1. Sign in or create an account at [https://cloud.mongodb.com](https://cloud.mongodb.com)
-2. Click **Build a Cluster** → choose **AWS** and a region close to your EC2 instance.
-3. Choose the **free tier (M0)** for testing, then **Create Cluster**.
-
-**Why:** Atlas provides a managed, production-ready MongoDB instance without self-hosting.
-
-## 2. Add a Database User
-
-* In Atlas: **Database Access** → **Add New Database User**
-* Create credentials (username & password). Store these securely.
-* For learning, choose **Read and write to any database**; in production scope permissions properly.
-
-## 3. Network Access — Allow IPs
-
-* In Atlas: **Network Access** → **Add IP Address**
-* You can add your current IP or select **Allow access from anywhere (0.0.0.0/0)** for testing only.
-
-**Security note:** Allowing `0.0.0.0/0` is insecure for production — instead add only the EC2 public IP or VPC peering.
-
-## 4. Connect (get connection URI)
-
-* Click **Connect** → choose **Connect with MongoDB Compass** or **Connect your application**
-* Use the connection string (URI) format:
-
-```
-mongodb+srv://<username>:<password>@cluster0.mongodb.net/travelmemory?retryWrites=true&w=majority
-```
-
-* Replace `<username>` and `<password>` with your user credentials.
-
-## 5. Create `travelmemory` database using Compass
-
-* Open MongoDB Compass and paste the URI.
-* After connecting, click **Create Database** → name it `travelmemory` and create a collection (e.g., `trips`).
-* Add documents with fields like `location`, `dateVisited`, and `notes`.
-
-**Why:** The application uses this DB for storing travel entries.
-
----
-
-# Deploy Backend (Node.js / Express)
-
-This section clones the repository, installs dependencies, configures environment variables, and runs the backend.
-
-## 1. Clone the repository on EC2
-
-```bash
-git clone https://github.com/UnpredictablePrashant/TravelMemory.git
-cd TravelMemory/backend
-```
-
-**Explanation:** `git clone` downloads the source; `cd` moves into the backend source folder where the backend server code lives.
-
-## 2. Create `.env` file with MongoDB URI and PORT
-
-```bash
-nano .env
-```
-
-Add:
-
-```
-MONGO_URI='ENTER_YOUR_URL'
+MONGO_URI='your_connection_uri'
 PORT=3001
-```
 
-* Replace `ENTER_YOUR_URL` with the Atlas connection URI (URL-encode or wrap in quotes if it contains special characters).
+Step 4 — Deploy Backend
 
-**Why:** The backend reads `MONGO_URI` to connect to MongoDB and `PORT` to know which port to listen on.
+SSH into backend instances.
 
-## 3. Install dependencies
+Clone repo:
 
-```bash
+git clone https://github.com/aviral31/TravelMemory.git
+cd TravelMemory/backend
 npm install
-```
-
-**Why:** Installs libraries listed in `package.json` (Express, Mongoose, etc.).
-
-## 4. Start the backend server
-
-```bash
 node index.js
-```
 
-**Explanation:** This launches the backend. By default it will listen on port `3001` as per `.env`.
+Use PM2 for process management.
 
-**Tip (production):** Use `pm2` or systemd to keep the process running in the background. Example with pm2:
+Step 5 — Deploy Frontend
 
-```bash
-sudo npm install -g pm2
-pm2 start index.js --name travelmemory-backend
-pm2 save
-pm2 startup
-```
+SSH into frontend instances.
 
-## 5. Test the API
+Go to frontend folder:
 
-From a browser or using `curl`:
-
-```bash
-curl http://EC2_PUBLIC_IP:3001/hello
-```
-
-You should see `Hello World` (or the API's test response).
-
-> If the request times out, check: security group inbound rules allow port `3001` from your IP (or 0.0.0.0/0 for testing).
-
----
-
-# Deploy Frontend (React)
-
-This section shows how to run the React frontend in development mode or build it for production.
-
-## 1. SSH into EC2 (if not already)
-
-```bash
-ssh -i /path/to/your-key.pem ubuntu@EC2_PUBLIC_IP
-```
-
-## 2. Go to frontend folder
-
-```bash
 cd TravelMemory/frontend
-```
 
-## 3. Configure environment variable for backend URL
+Set API endpoint in .env:
 
-Create `.env` with the backend URL so React can call the API:
+REACT_APP_BACKEND_URL=http://<backend-instance-ip>:3001
 
-```bash
-echo "REACT_APP_BACKEND_URL=http://EC2_PUBLIC_IP:3001" > .env
-```
+Build and move files:
 
-**Why:** React reads `REACT_APP_` prefixed env vars at build time and uses them in the client app.
-
-## 4. Install frontend packages
-
-```bash
 npm install
-```
-
-## 5. Run in development mode (optional)
-
-```bash
-npm start
-```
-
-This starts a dev server on port `3000`. Access at `http://EC2_PUBLIC_IP:3000`.
-
-## 6. Production build and serve with Nginx (recommended)
-
-To deploy as static assets:
-
-```bash
 npm run build
 sudo mv build /var/www/travelmemory
-```
 
-Then configure Nginx (see next section) to serve `/var/www/travelmemory`.
+Step 6 — Configure Nginx Reverse Proxy
 
-**Why production build:** React dev server is for development only; production uses optimized static files.
-
----
-
-# Nginx — Configure Reverse Proxy (serve frontend & proxy API)
-
-Using Nginx lets you expose the frontend on port 80 (no `:3000`) and route API calls to the backend.
-
-## 1. Install Nginx
-
-```bash
-sudo apt update
 sudo apt install nginx -y
-```
+sudo nano /etc/nginx/sites-available/travelmemory
 
-## 2. Example site config (save as `/etc/nginx/sites-available/travelmemory`)
+Example config:
 
-```nginx
 server {
     listen 80;
-    server_name frontend.aviralpaliwal.ink;  # replace with your domain or EC2 public IP
+    server_name frontend.aviralpaliwal.ink;
 
-    root /var/www/travelmemory;              # React build directory
+    root /var/www/travelmemory;
     index index.html;
 
     location /api/ {
-        proxy_pass http://localhost:3001/;   # forward API requests to backend
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_pass http://<backend-private-ip>:3001/;
     }
 
-    # Fallback to index.html for SPA routing
     location / {
         try_files $uri /index.html;
     }
 }
-```
 
-**Explanation:**
+Enable site:
 
-* Requests to `/api/*` are proxied to the backend on `localhost:3001`.
-* All other requests serve the static React files and support client-side routing via `try_files`.
-
-## 3. Enable the site and reload Nginx
-
-```bash
 sudo ln -s /etc/nginx/sites-available/travelmemory /etc/nginx/sites-enabled/
-sudo nginx -t
 sudo systemctl reload nginx
-```
 
-## 4. Allow HTTP in firewall
+Step 7 — Create Application Load Balancer
 
-If UFW is enabled:
+Go to EC2 → Load Balancers → Create Load Balancer → Application Load Balancer.
 
-```bash
-sudo ufw allow 'Nginx Full'
-```
+Scheme: Internet-facing.
 
-## 5. (Optional) Enable HTTPS with Certbot
+Add listeners:
 
-```bash
-sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d frontend.aviralpaliwal.ink
-```
+HTTP:80 → Target Group (frontend, port 80)
 
-**Why SSL:** Protects traffic, required for many modern browsers and security best practices.
+HTTP:3000 → Target Group (frontend, port 3000)
 
----
+Register frontend instances in the Target Groups.
 
-# Run Backend & Frontend as Services (recommended)
+Step 8 — Configure Cloudflare CNAME
 
-For production, run the backend as a service with `pm2` or `systemd` and serve frontend with Nginx.
+Add CNAME record:
 
-### Example using systemd for backend
+Name: frontend
 
-Create `/etc/systemd/system/travelmemory-backend.service`:
+Target: <ALB-DNS-Name>
 
-```ini
-[Unit]
-Description=TravelMemory Backend
-After=network.target
+Proxy Status: DNS only.
 
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/TravelMemory/backend
-ExecStart=/usr/bin/node index.js
-Restart=on-failure
-Environment=NODE_ENV=production
+Step 9 — Test Deployment
 
-[Install]
-WantedBy=multi-user.target
-```
+Access app via: http://frontend.aviralpaliwal.ink
 
-Enable and start it:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable travelmemory-backend
-sudo systemctl start travelmemory-backend
-```
-
----
-
-# Troubleshooting & Common Issues
-
-### 1. Backend not reachable (timeout)
-
-* Check EC2 Security Group — allow inbound traffic on port `3001` (or 80 if proxied via Nginx).
-* Confirm backend is running: `ps aux | grep node` or `pm2 list`.
-
-### 2. CORS errors in browser
-
-If your frontend is served from a different origin than backend, enable CORS in Express:
-
-```js
-// example in Express (Node.js)
-const cors = require('cors');
-app.use(cors({ origin: '*' })); // Use specific origin in production
-```
-
-### 3. React env var not picked up
-
-* Remember React reads `REACT_APP_*` variables at **build time**.
-* After editing `.env`, rebuild the frontend with `npm run build`.
-
-### 4. `app.py` or file missing in Docker builds
-
-* Ensure `COPY` paths in Dockerfile are correct and that build context (the `.`) is used.
-
-### 5. Permissions & file ownership
-
-* If files under `/var/www` are owned by root, allow nginx user to read them:
-
-```bash
-sudo chown -R www-data:www-data /var/www/travelmemory
-sudo chmod -R 755 /var/www/travelmemory
-```
-
----
-
-# Security & Best Practices
-
-* **Do not** use `0.0.0.0/0` in production for MongoDB Atlas; instead whitelist your EC2 IP or use VPC peering.
-* Use **least-privilege IAM roles** for EC2 if using AWS services programmatically.
-* Store secrets (Mongo URI, API keys) in **AWS Systems Manager Parameter Store**, **Secrets Manager**, or environment variables securely (avoid committing `.env` to Git).
-* Enable HTTPS (TLS) via Certbot/LetsEncrypt.
-* Use monitoring (CloudWatch, PM2 dashboard) and logging for production readiness.
-
----
+Verify frontend loads and backend API is functional.
