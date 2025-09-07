@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "echo \"No build step required\"",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Prashant Dey",
   "license": "ISC",
@@ -15,4 +18,5 @@
     "mongoose": "^7.2.4",
     "nodemon": "^2.0.22"
   }
+  
 }
