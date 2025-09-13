@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'Jenkins-Aviral' }
+    agent { name 'Jenkins-Aviral' }
     stages {
         stage('Checkout') {
             steps {
@@ -19,4 +19,5 @@ pipeline {
     }
 
 }
+
 
