@@ -1,0 +1,65 @@
+// The Final Travel Memory Jenkinsfile
+pipeline {
+    // 1. Use the agent we configured
+    agent { label 'Jenkins-Aviral' }
+
+    // 2. Define the non-secret variables
+    environment {
+        app_name ='Travel Memory'
+    }
+    
+    // 3. Define the parameters for flexibility (for manual runs)
+    parameters {
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Check this to run unit tests.')
+    }
+
+    // 4. Define the automatic trigger for this pipeline
+    triggers {
+        // This enables the pipeline to be started automatically by a GitHub webhook on a 'git push'
+        githubPush()
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git 'https://github.com/aviral3105/TravelMemory/'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                // Run npm install inside the 'backend' folder
+                dir('backend') {
+                    sh 'npm install'
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            // A conditional stage based on our parameter
+            when { expression { return params.RUN_TESTS } }
+            steps {
+                dir('backend') {
+                    sh 'npm test'
+                }
+            }
+        }
+
+        stage('Login to AWS and List S3 Buckets') {
+            steps {
+                    // Use credentials securely
+                    withCredentials([awsCredentials(credentialsId: 'aws-credentials-aviral', access_key_IdVariable: 'ACCESS_KEY', secret_access_keyVariable: 'SECRET_KEY')]) {
+                        // Login to AWS ECR
+                        sh '''
+                            aws configure set aws_access_key_id $ACCESS_KEY
+                            aws configure set aws_secret_access_key $SECRET_KEY
+                            aws configure set default.region ca-central-1
+                            aws s3 ls
+                        '''
+                        echo (environment.app_name)
+                    }    
+            }
+            }
+        }
+    }
+}
