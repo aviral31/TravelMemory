@@ -45,21 +45,25 @@ pipeline {
             }
         }
 
-        stage('Login to AWS and List S3 Buckets') {
+       stage('Login to AWS and Check S3 buckets') {
+
             steps {
-                    // Use credentials securely
-                    withCredentials([awsCredentials(credentialsId: 'aws-credentials-aviral', access_key_IdVariable: 'ACCESS_KEY', secret_access_keyVariable: 'SECRET_KEY')]) {
-                        // Login to AWS ECR
-                        sh '''
-                            aws configure set aws_access_key_id $ACCESS_KEY
-                            aws configure set aws_secret_access_key $SECRET_KEY
-                            aws configure set default.region ca-central-1
-                            aws s3 ls
-                        '''
-                        echo (environment.app_name)
-                    }    
+
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
+
+                  credentialsId: 'aws-creds-aryan']]) {
+
+                    echo "checking AWS S3 bucket.."
+
+                    sh "aws s3 ls"
+
+                    echo ${env.app_name} running on AWS
+
+                }
+
             }
-            }
+
         }
+
     }
-}
+            }
