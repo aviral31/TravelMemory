@@ -50,20 +50,12 @@ pipeline {
             steps {
 
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
-
                   credentialsId: 'aws-credentials-aviral']]) {
-
                     echo "checking AWS S3 bucket.."
-
                     sh "aws s3 ls"
-
                     echo ${env.app_name} running on AWS
-
                 }
-
             }
-
         }
-
     }
             }
